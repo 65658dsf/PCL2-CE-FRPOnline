@@ -29,11 +29,10 @@ PCL2 CE FRPOnline 是基于 PCL-CE 开源代码二次开发的社区版本，包
 
 欢迎大家来用用看！
 
-**开发群：** [599620549](https://qm.qq.com/q/PNQA4Md8wc)
+构建命令：
 
-**用户 1 群：** [1028074835](https://qm.qq.com/q/qrMGJo8BQQ)
-
-**用户 2 群：** [1070029541](https://qm.qq.com/q/lBywbDMWhG)
+- x64： dotnet publish "Plain Craft Launcher 2/Plain Craft Launcher 2.vbproj" -c Release -r win-x64
+- ARM64： dotnet publish "Plain Craft Launcher 2/Plain Craft Launcher 2.vbproj" -c Release -r win-arm64
 
 ### ✨ 隐藏提示
 

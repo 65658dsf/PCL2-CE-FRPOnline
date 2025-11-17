@@ -27,10 +27,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Images\icon.ico</ApplicationIcon>
-    <AssemblyTitle>PCL-FRPOnline</AssemblyTitle>
-    <Description>Minecraft 启动器 (作者: 龙腾猫跃; 社区版本FRP联机版)</Description>
-    <Product>PCL-FRPOnline</Product>
-    <AssemblyName>PCL-FRPOnline</AssemblyName>
+    <AssemblyTitle>Plain Craft Launcher Community Edition</AssemblyTitle>
+    <Description>Minecraft 启动器 (作者: 龙腾猫跃; 经社区二次开发版本)</Description>
+    <Product>Plain Craft Launcher Community Edition</Product>
     <PackageId>PlainCraftLauncher2</PackageId>
     <Copyright>Copyright © 龙腾猫跃 2016. All Rights Reserved.</Copyright>
     <AssemblyVersion>2.13.4.0</AssemblyVersion>

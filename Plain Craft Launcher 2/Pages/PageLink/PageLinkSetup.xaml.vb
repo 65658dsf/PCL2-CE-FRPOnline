@@ -78,11 +78,14 @@ Class PageLinkSetup
     End Sub
     Private Sub BtnLogout_Click(sender As Object, e As RoutedEventArgs) Handles BtnLogout.Click
         If MyMsgBox("你确定要退出登录吗？", "退出登录", "确定", "取消") = 1 Then
+            Config.Link.StellarToken = ""
             Config.Link.StellarTokenConfig.Reset()
             BtnLogin.Visibility = Visibility.Visible
             BtnRegister.Visibility = Visibility.Visible
             BtnCancel.Visibility = Visibility.Collapsed
             TextLogin.Text = "登录 StellarFrp 以使用中心转发隧道"
+            CardLogged.Visibility = Visibility.Collapsed
+            CardNotLogged.Visibility = Visibility.Visible
             Reload()
             Log("[Link] 已退出 StellarFrp")
             Hint("已退出登录！", HintType.Finish, False)
