@@ -1,0 +1,32 @@
+﻿name: Build Test
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "*/**"
+      - "PCL.Core.csproj"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "*/**"
+      - "PCL.Core.csproj"
+  workflow_dispatch: 
+
+jobs:
+  build:
+    name: Build
+    strategy:
+      matrix:
+        include:
+          - configuration: Debug
+            architecture: x64
+          - configuration: Debug
+            architecture: ARM64
+      fail-fast: true
+    uses: ./.github/workflows/reusable_build.yml
+    with:
+      configuration: ${{ matrix.configuration }}
+      architecture: ${{ matrix.architecture }}
+    secrets: inherit

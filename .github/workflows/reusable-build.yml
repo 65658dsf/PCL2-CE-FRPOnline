@@ -1,0 +1,69 @@
+name: Build (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      configuration:
+        required: true
+        type: string
+      architecture:
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      LANG: en_US.UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set Describe
+        run: |
+          describe=`git describe --tags --always`
+          echo "describe=$describe" >> $GITHUB_ENV
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Update Help
+        continue-on-error: true
+        run: |
+          cd ..
+          git clone https://github.com/PCL-Community/PCL2CEHelp.git -b master --single-branch --depth 1
+          cd PCL2CEHelp
+          rm -f ./* || true
+          zip -r Help.zip . -x "./.*/*"
+          cp -f Help.zip "${{ github.workspace }}/Plain Craft Launcher 2/Resources/Help.zip"
+          cd ..
+          rm -rf PCL2CEHelp
+          cd "${{ github.workspace }}"
+
+      - name: Build Project
+        env:
+          PCL_WRITE_SECRET: '1'
+          PCL_MS_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          PCL_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          PCL_TELEMETRY_KEY: ${{ secrets.TELEMETRY_KEY }}
+          PCL_NAID_CLIENT_ID: ${{ secrets.NAID_CLIENT_ID }}
+          PCL_NAID_CLIENT_SECRET: ${{ secrets.NAID_CLIENT_SECRET }}
+          PCL_LINK_SERVER_ROOT: ${{ secrets.LINK_SERVER_ROOTS }}
+          PCL_LOBBY_DEFAULT_SECRET: ${{ secrets.LOBBY_DEFAULT_SECRET }}
+          PCL_GITHUB_SHA: ${{ github.sha }}
+        run: |
+          dotnet publish "Plain Craft Launcher 2/Plain Craft Launcher 2.vbproj" \
+          -p:Configuration=${{ inputs.configuration }} -p:Platform=${{ inputs.architecture }} \
+          -p:DeleteExistingFiles=true -o ./artifact --self-contained false
+
+      - name: Upload the Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PCL2_CE_${{ inputs.configuration }}_${{ inputs.architecture }}
+          path: artifact/**

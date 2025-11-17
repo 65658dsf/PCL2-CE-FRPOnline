@@ -1,0 +1,48 @@
+﻿name: Build (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      configuration:
+        required: true
+        type: string
+      architecture:
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      LANG: en_US.UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build
+        env:
+          PCL_WRITE_SECRET: '1'
+          PCL_GITHUB_SHA: ${{ github.sha }}
+        run: |
+          echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          # Build
+          dotnet build "PCL.Core.csproj" \
+          -p:Configuration=${{ inputs.configuration }} -p:Platform=${{ inputs.architecture }} \
+          -p:EmitCompilerGeneratedFiles=true -p:IncludeGeneratedFiles=true \
+          -p:CompilerGeneratedFilesOutputPath=./obj/generated
+          # List generated files for debug
+          echo "Generated files:"
+          find ./obj/generated -name "*.cs" -type f | head -20
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PCL.Core_${{ inputs.configuration }}-${{ inputs.architecture }}_${{ env.SHORT_SHA }}
+          path: bin/${{ inputs.configuration }}-${{ inputs.architecture }}/**
