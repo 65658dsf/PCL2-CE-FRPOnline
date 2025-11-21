@@ -139,43 +139,24 @@ Public Class PageLinkLobby
                     CurrentSubpage = Subpages.PanFinish
                 End Sub)
 
-        If Not String.IsNullOrWhiteSpace(Config.Link.StellarToken) Then
-            Log("[Link] 开始创建 Stellar 隧道")
-            System.Threading.Tasks.Task.Run(Async Function()
-                                 Dim resTuple = Await StellarFrpTransportCreateHelper.StartCreateAsync(port, username)
-                                 If resTuple.Item1 Then
-                                     _currentPublicAddress = resTuple.Item2
-                                     Log("[Link] Stellar 隧道创建成功，地址：" & _currentPublicAddress)
-                                     RunInUi(Sub()
-                                             LabConnectType.Text = "中心转发"
-                                             LabFinishQuality.Text = "已连接"
-                                             LabFinishId.Text = _currentPublicAddress
-                                             BtnFinishCopyIp.Visibility = Visibility.Visible
-                                         End Sub)
-                                     StartRoomMonitoring()
-                                 Else
-                                     Log("[Link] Stellar 隧道创建失败：" & resTuple.Item2)
-                                     RunInUi(Sub() Hint("隧道启动失败，请稍后重试", HintType.Critical))
-                                 End If
-                             End Function)
-        Else
-            Log("[Link] 使用本地 FRP 方案启动隧道")
-            System.Threading.Tasks.Task.Run(Async Function()
-                                 Dim ok = Await FrpController.StartAsync(port, username)
-                                 If ok Then
-                                     _currentPublicAddress = FrpController.PublicHost & ":" & FrpController.PublicPort.ToString()
-                                     RunInUi(Sub()
-                                             LabConnectType.Text = "中心转发"
-                                             LabFinishQuality.Text = "已连接"
-                                             LabFinishId.Text = _currentPublicAddress
-                                             BtnFinishCopyIp.Visibility = Visibility.Visible
-                                         End Sub)
-                                     StartRoomMonitoring()
-                                 Else
-                                     RunInUi(Sub() Hint("隧道启动失败，请稍后重试", HintType.Critical))
-                                 End If
-                             End Function)
-        End If
+        Dim providerKey = Config.Link.FrpProvider
+        System.Threading.Tasks.Task.Run(Async Function()
+                             Dim provider = FrpProviderFactory.GetProvider(providerKey)
+                             Dim resTuple = Await provider.CreateOrStartTunnelAsync(port, username)
+                             If resTuple.Item1 Then
+                                 _currentPublicAddress = resTuple.Item2
+                                 Dim typeText = If(String.Equals(providerKey, "stellar", StringComparison.OrdinalIgnoreCase), "Stellar 中心转发", "本地 FRP")
+                                 RunInUi(Sub()
+                                         LabConnectType.Text = typeText
+                                         LabFinishQuality.Text = "已连接"
+                                         LabFinishId.Text = _currentPublicAddress
+                                         BtnFinishCopyIp.Visibility = Visibility.Visible
+                                     End Sub)
+                                 StartRoomMonitoring()
+                             Else
+                                 RunInUi(Sub() Hint("隧道启动失败，请稍后重试", HintType.Critical))
+                             End If
+                         End Function)
         '房间创建已在隧道任务中异步发起
     End Sub
 
@@ -254,12 +235,9 @@ Public Class PageLinkLobby
             BtnFinishExit.Text = "关闭房间"
             Await FrpController.StopAsync().ConfigureAwait(True)
             Try
-                Dim tid = Config.Link.CurrentTunnelId
-                Dim token = Config.Link.StellarToken
-                If tid > 0 AndAlso Not String.IsNullOrWhiteSpace(token) Then
-                    Dim ok = StellarFrpApi.DeleteProxy(token, tid)
-                    If ok Then Config.Link.CurrentTunnelId = 0
-                End If
+                Dim providerKey = Config.Link.FrpProvider
+                Dim provider = FrpProviderFactory.GetProvider(providerKey)
+                Await provider.DeleteTunnelIfNeededAsync()
             Catch
             End Try
         End If

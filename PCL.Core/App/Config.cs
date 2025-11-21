@@ -423,6 +423,7 @@ public static partial class Config
             [ConfigItem<string>("LinkProxyNamePattern", "pclce-{LobbyCode}-{Username}")] public partial string ProxyNamePattern { get; set; }
             [ConfigItem<string>("FrpcVersion", "0.61.2")] public partial string FrpcVersion { get; set; }
             [ConfigItem<int>("LinkCurrentTunnelId", 0, ConfigSource.SharedEncrypt)] public partial int CurrentTunnelId { get; set; }
+            [ConfigItem<string>("LinkFrpProvider", "local", ConfigSource.Local)] public partial string FrpProvider { get; set; }
         }
 
     /// <summary>

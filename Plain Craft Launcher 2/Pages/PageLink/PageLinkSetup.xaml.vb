@@ -21,15 +21,47 @@ Class PageLinkSetup
 
     End Sub
     Public Sub Reload() Handles Me.Loaded
-        If String.IsNullOrWhiteSpace(Config.Link.StellarToken) Then
+        ' 填充服务商下拉框（防止选择事件重入）
+        Try
+            AniControlEnabled += 1
+            ComboFrpProvider.Items.Clear()
+            ComboFrpProvider.Items.Add(New MyComboBoxItem() With {.Tag = "stellar", .Content = "StellarFrp"})
+            ComboFrpProvider.Items.Add(New MyComboBoxItem() With {.Tag = "local", .Content = "本地 FRP"})
+            Dim cur = Config.Link.FrpProvider
+            Dim idx As Integer = 0
+            For i = 0 To ComboFrpProvider.Items.Count - 1
+                Dim it = CType(ComboFrpProvider.Items(i), MyComboBoxItem)
+                If String.Equals(CStr(it.Tag), cur, StringComparison.OrdinalIgnoreCase) Then idx = i : Exit For
+            Next
+            ComboFrpProvider.SelectedIndex = idx
+        Catch
+        Finally
+            AniControlEnabled -= 1
+        End Try
+
+        If String.Equals(Config.Link.FrpProvider, "stellar", StringComparison.OrdinalIgnoreCase) Then
+            If String.IsNullOrWhiteSpace(Config.Link.StellarToken) Then
+                CardLogged.Visibility = Visibility.Collapsed
+                CardNotLogged.Visibility = Visibility.Visible
+                BtnLogin.Visibility = Visibility.Visible
+                BtnRegister.Visibility = Visibility.Visible
+                BtnCancel.Visibility = Visibility.Collapsed
+                TextLogin.Text = "登录 StellarFrp 以使用中心转发隧道"
+            Else
+                CardLogged.Visibility = Visibility.Visible
+                CardNotLogged.Visibility = Visibility.Collapsed
+                TextUsername.Text = "已登录 StellarFrp"
+                TextStatus.Text = "已授权使用 StellarFrp 隧道"
+                RefreshStellarNodes()
+            End If
+        Else
+            ' 本地 FRP 选择时，无需登录，隐藏登录卡片
             CardLogged.Visibility = Visibility.Collapsed
             CardNotLogged.Visibility = Visibility.Visible
-        Else
-            CardLogged.Visibility = Visibility.Visible
-            CardNotLogged.Visibility = Visibility.Collapsed
-            TextUsername.Text = "已登录 StellarFrp"
-            TextStatus.Text = "已授权使用 StellarFrp 隧道"
-            RefreshStellarNodes()
+            TextLogin.Text = "选择本地 FRP 无需登录"
+            BtnLogin.Visibility = Visibility.Collapsed
+            BtnRegister.Visibility = Visibility.Collapsed
+            BtnCancel.Visibility = Visibility.Collapsed
         End If
     End Sub
     
@@ -50,12 +82,12 @@ Class PageLinkSetup
                                        End Sub)
                                Exit Sub
                            End If
-                           RunInUi(Sub()
-                                       CardLogged.Visibility = Visibility.Visible
-                                       CardNotLogged.Visibility = Visibility.Collapsed
-                                       TextUsername.Text = "已登录 StellarFrp"
-                                       TextStatus.Text = "已授权使用 StellarFrp 隧道"
-                                   End Sub)
+                            RunInUi(Sub()
+                                        CardLogged.Visibility = Visibility.Visible
+                                        CardNotLogged.Visibility = Visibility.Collapsed
+                                        TextUsername.Text = "已登录 StellarFrp"
+                                        TextStatus.Text = "已授权使用 StellarFrp 隧道"
+                                    End Sub)
                            Try
                                Dim ui = StellarFrpApi.GetUserInfo(Config.Link.StellarToken)
                                If ui IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(ui.Username) Then
@@ -131,6 +163,17 @@ Class PageLinkSetup
         End If
     End Sub
 
+    Private Sub ComboFrpProvider_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboFrpProvider.SelectionChanged
+        If AniControlEnabled = 0 AndAlso ComboFrpProvider.SelectedItem IsNot Nothing Then
+            Dim item = CType(ComboFrpProvider.SelectedItem, MyComboBoxItem)
+            Dim key = CStr(item.Tag)
+            If Not String.Equals(key, Config.Link.FrpProvider, StringComparison.OrdinalIgnoreCase) Then
+                Setup.Set("LinkFrpProvider", key)
+                Reload()
+            End If
+        End If
+    End Sub
+
     Private Sub RefreshStellarNodes()
         If String.IsNullOrWhiteSpace(Config.Link.StellarToken) Then Return
         RunInNewThread(Sub()
@@ -139,15 +182,17 @@ Class PageLinkSetup
                                Dim suggestions = nodes.Where(Function(n) n.Status = 1 AndAlso n.AllowedTypes IsNot Nothing AndAlso n.AllowedTypes.Contains("TCP")).OrderByDescending(Function(n) n.Bandwidth).ToList()
                                RunInUi(Sub()
                                            ComboStellarNode.Items.Clear()
-                                           For Each n In suggestions
-                                               ComboStellarNode.Items.Add(New MyComboBoxItem() With {.Tag = n.Id, .Content = n.Name})
+                                           For Each n In nodes
+                                               Dim item As New MyComboBoxItem() With {.Tag = n.Id, .Content = n.Name}
+                                               item.IsEnabled = (n.Status = 1)
+                                               ComboStellarNode.Items.Add(item)
                                            Next
                                            Dim selectedId = Config.Link.SelectedNodeId
                                            If selectedId > 0 Then
                                                Dim idx = -1
                                                For i = 0 To ComboStellarNode.Items.Count - 1
                                                    Dim it = CType(ComboStellarNode.Items(i), MyComboBoxItem)
-                                                   If CType(it.Tag, Integer) = selectedId Then idx = i : Exit For
+                                                   If CType(it.Tag, Integer) = selectedId AndAlso it.IsEnabled Then idx = i : Exit For
                                                Next
                                                ComboStellarNode.SelectedIndex = idx
                                                TextSelectedNode.Text = selectedId.ToString()
