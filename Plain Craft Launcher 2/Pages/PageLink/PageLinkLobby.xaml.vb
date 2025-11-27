@@ -141,6 +141,28 @@ Public Class PageLinkLobby
 
         Dim providerKey = Config.Link.FrpProvider
         System.Threading.Tasks.Task.Run(Async Function()
+                             If String.Equals(providerKey, "local", StringComparison.OrdinalIgnoreCase) Then
+                                 Dim profilesJson = Config.Link.LocalFrpProfiles
+                                 Dim selectedId = Config.Link.LocalFrpProfileId
+                                 Dim canStart As Boolean = False
+                                 Try
+                                     If Not String.IsNullOrWhiteSpace(profilesJson) AndAlso profilesJson.Trim().StartsWith("[") Then
+                                         Dim arr = Newtonsoft.Json.Linq.JArray.Parse(profilesJson)
+                                         If arr.Count > 0 Then
+                                             If String.IsNullOrWhiteSpace(selectedId) Then
+                                                 Config.Link.LocalFrpProfileId = CType(arr(0), Newtonsoft.Json.Linq.JObject).Value(Of String)("Id")
+                                             End If
+                                             canStart = Not String.IsNullOrWhiteSpace(Config.Link.LocalFrpProfileId)
+                                         End If
+                                     End If
+                                 Catch
+                                 End Try
+                                 If Not canStart Then
+                                     RunInUi(Sub() Hint("请先在联机设置中添加本地 FRP 配置", HintType.Info))
+                                     RunInUi(Sub() BtnCreate.IsEnabled = True)
+                                     Return
+                                 End If
+                             End If
                              Dim provider = FrpProviderFactory.GetProvider(providerKey)
                              Dim resTuple = Await provider.CreateOrStartTunnelAsync(port, username)
                              If resTuple.Item1 Then

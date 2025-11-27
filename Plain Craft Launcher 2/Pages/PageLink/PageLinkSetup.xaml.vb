@@ -54,6 +54,8 @@ Class PageLinkSetup
                 TextStatus.Text = "已授权使用 StellarFrp 隧道"
                 RefreshStellarNodes()
             End If
+            CardLocalFrp.Visibility = Visibility.Collapsed
+            CardStellarTunnel.Visibility = Visibility.Visible
         Else
             ' 本地 FRP 选择时，无需登录，隐藏登录卡片
             CardLogged.Visibility = Visibility.Collapsed
@@ -62,6 +64,9 @@ Class PageLinkSetup
             BtnLogin.Visibility = Visibility.Collapsed
             BtnRegister.Visibility = Visibility.Collapsed
             BtnCancel.Visibility = Visibility.Collapsed
+            CardLocalFrp.Visibility = Visibility.Visible
+            RefreshLocalFrpUi()
+            CardStellarTunnel.Visibility = Visibility.Collapsed
         End If
     End Sub
     
@@ -202,6 +207,111 @@ Class PageLinkSetup
                                Log(ex, "[StellarFrp] 节点列表获取失败", LogLevel.Debug)
                            End Try
                        End Sub)
+    End Sub
+
+    Private Sub RefreshLocalFrpUi()
+        Try
+            Dim profilesJson = Config.Link.LocalFrpProfiles
+            Dim selectedId = Config.Link.LocalFrpProfileId
+            Dim name As String = "未设置"
+            Dim detail As String = "-"
+            If String.IsNullOrWhiteSpace(profilesJson) OrElse Not profilesJson.Trim().StartsWith("[") Then
+                Dim legacyHost = Setup.Get("FrpsHost")
+                Dim legacyPortStr = Setup.Get("FrpsPort")
+                Dim legacyPort As Integer = 0
+                Integer.TryParse(legacyPortStr, legacyPort)
+                If Not String.IsNullOrWhiteSpace(legacyHost) AndAlso legacyPort > 0 Then
+                    Dim arrNew As New Newtonsoft.Json.Linq.JArray()
+                    Dim id0 = Guid.NewGuid().ToString("N")
+                    Dim obj0 As New Newtonsoft.Json.Linq.JObject()
+                    obj0("Id") = id0
+                    obj0("Name") = "默认配置"
+                    obj0("ServerAddr") = legacyHost
+                    obj0("ServerPort") = legacyPort
+                    obj0("RemoteRange") = "10000-60000"
+                    arrNew.Add(obj0)
+                    Config.Link.LocalFrpProfiles = arrNew.ToString()
+                    Config.Link.LocalFrpProfileId = id0
+                    profilesJson = Config.Link.LocalFrpProfiles
+                    selectedId = id0
+                End If
+            End If
+            If Not String.IsNullOrWhiteSpace(profilesJson) AndAlso profilesJson.Trim().StartsWith("[") Then
+                Dim arr = Newtonsoft.Json.Linq.JArray.Parse(profilesJson)
+                Dim found As Newtonsoft.Json.Linq.JObject = Nothing
+                If Not String.IsNullOrWhiteSpace(selectedId) Then
+                    For Each it As Newtonsoft.Json.Linq.JObject In arr
+                        If String.Equals(it.Value(Of String)("Id"), selectedId, StringComparison.OrdinalIgnoreCase) Then found = it : Exit For
+                    Next
+                End If
+                If found Is Nothing AndAlso arr.Count > 0 Then found = CType(arr(0), Newtonsoft.Json.Linq.JObject)
+                If found IsNot Nothing Then
+                    name = found.Value(Of String)("Name")
+                    Dim addr = found.Value(Of String)("ServerAddr")
+                    Dim port = found.Value(Of Integer?)("ServerPort")
+                    Dim range = found.Value(Of String)("RemoteRange")
+                    detail = $"{addr}:{If(port.HasValue, port.Value, 0)} | {range}"
+                    Config.Link.LocalFrpProfileId = found.Value(Of String)("Id")
+                End If
+            End If
+            TextLocalFrpProfile.Text = name
+            TextLocalFrpDetail.Text = detail
+            CheckUseToml.Checked = Config.Link.LocalUseToml
+        Catch
+        End Try
+    End Sub
+
+    Private Sub BtnAddLocalFrp_Click(sender As Object, e As RoutedEventArgs) Handles BtnAddLocalFrp.Click
+        PanelAddLocalFrp.Visibility = Visibility.Visible
+        InputLocalFrpName.Text = ""
+        InputLocalFrpAddr.Text = ""
+        InputLocalFrpPort.Text = ""
+        InputLocalFrpRange.Text = "40000-50000"
+    End Sub
+
+    Private Sub BtnSaveLocalFrp_Click(sender As Object, e As RoutedEventArgs) Handles BtnSaveLocalFrp.Click
+        Dim name = InputLocalFrpName.Text?.Trim()
+        Dim addr = InputLocalFrpAddr.Text?.Trim()
+        Dim portStr = InputLocalFrpPort.Text?.Trim()
+        Dim range = InputLocalFrpRange.Text?.Trim()
+        Dim port As Integer = 0
+        Integer.TryParse(portStr, port)
+        If String.IsNullOrWhiteSpace(name) OrElse String.IsNullOrWhiteSpace(addr) OrElse port <= 0 OrElse String.IsNullOrWhiteSpace(range) OrElse Not range.Contains("-") Then
+            Hint("请完整填写配置名称、地址、端口与端口范围（形如 40000-50000）", HintType.Info)
+            Return
+        End If
+
+        Try
+            Dim arr As Newtonsoft.Json.Linq.JArray
+            If String.IsNullOrWhiteSpace(Config.Link.LocalFrpProfiles) OrElse Not Config.Link.LocalFrpProfiles.Trim().StartsWith("[") Then
+                arr = New Newtonsoft.Json.Linq.JArray()
+            Else
+                arr = Newtonsoft.Json.Linq.JArray.Parse(Config.Link.LocalFrpProfiles)
+            End If
+            Dim id = Guid.NewGuid().ToString("N")
+            Dim obj As New Newtonsoft.Json.Linq.JObject()
+            obj("Id") = id
+            obj("Name") = name
+            obj("ServerAddr") = addr
+            obj("ServerPort") = port
+            obj("RemoteRange") = range
+            arr.Add(obj)
+            Config.Link.LocalFrpProfiles = arr.ToString()
+            Config.Link.LocalFrpProfileId = id
+            Config.Link.LocalUseToml = True
+            PanelAddLocalFrp.Visibility = Visibility.Collapsed
+            RefreshLocalFrpUi()
+            Hint("已保存本地 FRP 配置", HintType.Finish, False)
+        Catch ex As Exception
+            Log(ex, "保存本地 FRP 配置失败", LogLevel.Hint)
+        End Try
+    End Sub
+
+    Private Sub CheckUseToml_MouseLeftButtonUp(sender As Object, e As MouseButtonEventArgs) Handles CheckUseToml.MouseLeftButtonUp
+        Try
+            Config.Link.LocalUseToml = CheckUseToml.Checked
+        Catch
+        End Try
     End Sub
 
 End Class

@@ -1,4 +1,5 @@
 Imports PCL.Core.App
+Imports PCL.Core.IO
 Imports Newtonsoft.Json.Linq
 Imports System.Net
 Imports System.Net.Sockets
@@ -594,12 +595,82 @@ Public Class LocalFrpProvider
     Public Async Function CreateOrStartTunnelAsync(localPort As Integer, username As String, Optional lobbyCode As String = "") As Task(Of Tuple(Of Boolean, String)) Implements IFrpProvider.CreateOrStartTunnelAsync
         Await Task.Yield()
         Try
-            Dim ok = Await FrpController.StartAsync(localPort, username, lobbyCode)
-            If ok Then
-                Dim addr = FrpController.PublicHost & ":" & FrpController.PublicPort.ToString()
-                Return New Tuple(Of Boolean, String)(True, addr)
+            If Not Config.Link.LocalUseToml Then
+                Dim okIni = Await FrpController.StartAsync(localPort, username, lobbyCode)
+                If okIni Then
+                    Dim addrIni = FrpController.PublicHost & ":" & FrpController.PublicPort.ToString()
+                    Return New Tuple(Of Boolean, String)(True, addrIni)
+                End If
             End If
-            Return New Tuple(Of Boolean, String)(False, "隧道启动失败")
+            Dim profilesJson = Config.Link.LocalFrpProfiles
+            Dim selectedId = Config.Link.LocalFrpProfileId
+            If String.IsNullOrWhiteSpace(profilesJson) OrElse Not profilesJson.Trim().StartsWith("[") Then
+                Return New Tuple(Of Boolean, String)(False, "未配置本地 FRP")
+            End If
+            Dim arr = Newtonsoft.Json.Linq.JArray.Parse(profilesJson)
+            Dim found As Newtonsoft.Json.Linq.JObject = Nothing
+            For Each it As Newtonsoft.Json.Linq.JObject In arr
+                If String.Equals(it.Value(Of String)("Id"), selectedId, StringComparison.OrdinalIgnoreCase) Then found = it : Exit For
+            Next
+            If found Is Nothing AndAlso arr.Count > 0 Then found = CType(arr(0), Newtonsoft.Json.Linq.JObject)
+            If found Is Nothing Then Return New Tuple(Of Boolean, String)(False, "未配置本地 FRP")
+
+            Dim serverAddr = found.Value(Of String)("ServerAddr")
+            Dim serverPort = found.Value(Of Integer?)("ServerPort")
+            Dim range = found.Value(Of String)("RemoteRange")
+            If String.IsNullOrWhiteSpace(serverAddr) OrElse Not serverPort.HasValue OrElse serverPort.Value <= 0 Then
+                Return New Tuple(Of Boolean, String)(False, "本地 FRP 配置不完整")
+            End If
+
+            Dim minV As Integer = 10000, maxV As Integer = 60000
+            Try
+                Dim parts = range?.Split("-"c)
+                If parts IsNot Nothing AndAlso parts.Length = 2 Then
+                    Integer.TryParse(parts(0), minV)
+                    Integer.TryParse(parts(1), maxV)
+                End If
+            Catch
+            End Try
+            If minV < 1 OrElse maxV <= minV Then
+                minV = 10000 : maxV = 60000
+            End If
+
+            Dim pattern = Config.Link.ProxyNamePattern
+            If String.IsNullOrWhiteSpace(pattern) Then pattern = "pclce-{LobbyCode}-{Username}"
+            Dim proxyName = pattern.Replace("{Username}", username).Replace("{LobbyCode}", lobbyCode)
+
+            Dim tomlDir = IO.Path.Combine(FileService.LocalDataPath, "frp")
+            IO.Directory.CreateDirectory(tomlDir)
+            Dim tomlPath = IO.Path.Combine(tomlDir, "local.toml")
+
+            Dim rnd As New Random()
+            Dim tries As Integer = 0
+            Dim lastErr As String = Nothing
+            While tries < 10
+                Dim remotePort As Integer = rnd.Next(minV, maxV)
+                Try
+                    Dim sb As New System.Text.StringBuilder()
+                    sb.AppendLine("serverAddr = """ & serverAddr & """")
+                    sb.AppendLine("serverPort = " & serverPort.Value.ToString())
+                    sb.AppendLine()
+                    sb.AppendLine("[[proxies]]")
+                    sb.AppendLine("name = """ & proxyName & """")
+                    sb.AppendLine("type = ""tcp""")
+                    sb.AppendLine("localIP = ""127.0.0.1""")
+                    sb.AppendLine("localPort = " & localPort.ToString())
+                    sb.AppendLine("remotePort = " & remotePort.ToString())
+                    IO.File.WriteAllText(tomlPath, sb.ToString(), System.Text.Encoding.UTF8)
+                    Dim ok = Await FrpController.StartWithTomlFileAsync(serverAddr, remotePort, tomlPath)
+                    If ok Then
+                        Dim addr = serverAddr & ":" & remotePort.ToString()
+                        Return New Tuple(Of Boolean, String)(True, addr)
+                    End If
+                Catch ex0 As Exception
+                    lastErr = ex0.Message
+                End Try
+                tries += 1
+            End While
+            Return New Tuple(Of Boolean, String)(False, If(String.IsNullOrWhiteSpace(lastErr), "隧道启动失败", lastErr))
         Catch ex As Exception
             Return New Tuple(Of Boolean, String)(False, ex.Message)
         End Try

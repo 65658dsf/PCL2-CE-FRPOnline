@@ -237,6 +237,72 @@ Public Module FrpController
             Return False
         End Try
     End Function
+
+    Public Async Function StartWithTomlFileAsync(serverAddr As String, remotePort As Integer, tomlPath As String) As Task(Of Boolean)
+        Await Task.Yield()
+        Try
+            Log("[FRP] StartWithTomlFileAsync")
+            PublicHost = serverAddr
+            PublicPort = remotePort
+
+            Dim cfgPath As String = tomlPath
+            Log("[FRP] Config: " & cfgPath)
+
+            Dim psi As New ProcessStartInfo()
+            psi.FileName = GetFrpcPath()
+            psi.Arguments = "-c \"" & cfgPath & "\""
+            psi.UseShellExecute = False
+            psi.RedirectStandardOutput = True
+            psi.RedirectStandardError = True
+            psi.CreateNoWindow = True
+            Try
+                psi.StandardOutputEncoding = Encoding.UTF8
+                psi.StandardErrorEncoding = Encoding.UTF8
+            Catch
+            End Try
+
+            _proc = New Process()
+            _proc.StartInfo = psi
+            _proc.EnableRaisingEvents = True
+            AddHandler _proc.Exited, Sub() IsRunning = False
+            Log("[FRP] Args: " & psi.Arguments)
+            Dim started = _proc.Start()
+            Log("[FRP] Started: " & started.ToString())
+            If Not started Then Return False
+
+            Dim ok As Boolean = False
+            Dim startDeadline = DateTime.UtcNow.AddSeconds(20)
+            Dim errTask = Task.Run(Async Function()
+                                       While Not _proc.HasExited
+                                           Dim el = Await _proc.StandardError.ReadLineAsync()
+                                           If el Is Nothing Then Exit While
+                                           Log("[FRP][stderr] " & el)
+                                       End While
+                                   End Function)
+            While DateTime.UtcNow < startDeadline
+                If _proc.HasExited Then Exit While
+                Dim line = Await _proc.StandardOutput.ReadLineAsync()
+                If line Is Nothing Then Exit While
+                Log("[FRP][stdout] " & line)
+                If line.ToLower().Contains("start proxy success") OrElse line.ToLower().Contains("connected") OrElse line.Contains("隧道启动成功") OrElse line.Contains("client/control.go") OrElse line.Contains("proxy_manager.go") Then
+                    ok = True
+                    Exit While
+                End If
+                If line.ToLower().Contains("error") OrElse line.ToLower().Contains("failed") Then
+                    Log("[FRP] Failure detected")
+                    ok = False
+                    Exit While
+                End If
+            End While
+
+            IsRunning = ok AndAlso Not _proc.HasExited
+            Log("[FRP] Result: " & IsRunning.ToString())
+            Return IsRunning
+        Catch ex As Exception
+            Log(ex, "[FRP] 使用 TOML 文件启动 frpc 失败", LogLevel.Hint)
+            Return False
+        End Try
+    End Function
     Public Async Function StartWithStellarAsync(serverAddr As String, remotePort As Integer, token As String, tunnelId As Integer) As Task(Of Boolean)
         Await Task.Yield()
         Try

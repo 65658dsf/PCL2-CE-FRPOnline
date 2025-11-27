@@ -424,6 +424,9 @@ public static partial class Config
             [ConfigItem<string>("FrpcVersion", "0.61.2")] public partial string FrpcVersion { get; set; }
             [ConfigItem<int>("LinkCurrentTunnelId", 0, ConfigSource.SharedEncrypt)] public partial int CurrentTunnelId { get; set; }
             [ConfigItem<string>("LinkFrpProvider", "local", ConfigSource.Local)] public partial string FrpProvider { get; set; }
+            [ConfigItem<string>("LinkLocalFrpProfiles", "[]", ConfigSource.Local)] public partial string LocalFrpProfiles { get; set; }
+            [ConfigItem<string>("LinkLocalFrpProfileId", "", ConfigSource.Local)] public partial string LocalFrpProfileId { get; set; }
+            [ConfigItem<bool>("LinkLocalUseToml", true, ConfigSource.Local)] public partial bool LocalUseToml { get; set; }
         }
 
     /// <summary>

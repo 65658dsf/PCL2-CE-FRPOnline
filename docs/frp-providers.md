@@ -83,6 +83,34 @@ Case "myfrp" : Return New MyFrpProvider()
 - 设置页：选择框写入 `Config.Link.FrpProvider`，触发 `Reload()` 更新卡片与文案。
 - 大厅创建：读取 `Config.Link.FrpProvider` 并通过 Provider 调用创建/启动隧道，刷新 `LabConnectType` 显示提供商类型。
 
+## 本地 FRP（local）配置与 TOML 启动
+- 新增本地配置管理：设置页“本地 FRP 配置”卡片，点击“添加配置”填写并保存：
+  - `serverAddr`（如 `xxx.xxx.xxx.xxx`）
+  - `serverPort`（如 `65535`）
+  - `远程端口范围`（如 `40000-50000`）
+- 持久化键：
+  - `Config.Link.LocalFrpProfiles`（JSON 数组，含 `Id/Name/ServerAddr/ServerPort/RemoteRange`）
+  - `Config.Link.LocalFrpProfileId`（当前选中项）
+  - `Config.Link.LocalUseToml`（布尔，是否使用 TOML 启动）
+- 创建房间时：
+  - 组合 `local.toml` 到 `LocalDataPath/frp/local.toml`
+  - 模板示例：
+    ```toml
+    serverAddr = "xxx.xxx.xxx.xxx"
+    serverPort = 65535
+
+    [[proxies]]
+    name = "MineCraft"
+    type = "tcp"
+    localIP = "127.0.0.1"
+    localPort = <MC 端口>
+    remotePort = <范围内随机值>
+    ```
+  - 启动命令：`StellarFrpc -c local.toml`
+  - 端口策略：在范围内随机选择；启动失败自动更换端口重试，最多 10 次。
+
+> 兼容迁移：首次使用时会自动导入旧式 `Setup.FrpsHost/FrpsPort` 为默认配置。
+
 ## 测试与兼容
 - 单元测试建议：
   - 配置持久化读写
